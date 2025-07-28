@@ -28,5 +28,5 @@ This tool is designed for AI researchers, developers, and power users who need t
 ## 🔗 Installation
 
 1.  Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension.
-2.  Click here to [Install the script](https://raw.githubusercontent.com/bohdan-gen-tech/MultiChat-Prompt-Sender/main/multichat-prompt-sender.user.js).
-3.  The script will automatically activate on the matched websites.
+2.  2. Enable [Developer mode](https://www.tampermonkey.net/faq.php?locale=en#Q209) and allow userscripts.
+3.  Click here to [Install the script](https://raw.githubusercontent.com/bohdan-gen-tech/MultiChat-Prompt-Sender/main/multichat-prompt-sender.user.js).
