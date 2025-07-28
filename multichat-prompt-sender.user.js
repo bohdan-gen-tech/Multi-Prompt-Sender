@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MultiChat Prompt Sender
 // @namespace    https://your-namespace.example.com
-// @version      2025.07.28.1
+// @version      2025.07.28.2
 // @description  Auto prompt sender in the chats after parsing models for current user
 // @author       Bohdan S.
 // @match        *://*/*
@@ -12,7 +12,6 @@
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/bohdan-gen-tech/MultiChat-Prompt-Sender/main/multichat-prompt-sender.user.js
 // @downloadURL  https://raw.githubusercontent.com/bohdan-gen-tech/MultiChat-Prompt-Sender/main/multichat-prompt-sender.user.js
-// ==/UserScript==
 // ==/UserScript==
 
 (function() {
@@ -335,7 +334,7 @@
         const groups = { Realistic: [], Anime: [] };
         modelsToRender.forEach(m => groups[m.isAnime ? 'Anime' : 'Realistic'].push(m));
         const completedIds = new Set(S.completed());
-        const currentId = location.pathname.match(/\/chat\/(.+)$/)?.[1];
+        const currentId = location.pathname.match(/\/chat\/(.+)$/)?.[1] || location.pathname.match(/\/premium-models\/(.+)$/)?.[1];
 
         if (shouldShowResults) {
             ['Realistic', 'Anime'].forEach(groupName => {
@@ -582,7 +581,7 @@
         let modelIds;
 
         if (runHere) {
-            const match = location.pathname.match(/\/chat\/(.+)$/);
+            const match = location.pathname.match(/\/chat\/(.+)$/) || location.pathname.match(/\/premium-models\/(.+)$/);
             if (!match) { return; }
             modelIds = [match[1]];
         } else {
@@ -615,10 +614,29 @@
         }
     }
 
+    async function prepareChatPage() {
+        try {
+            const readyElement = await Promise.race([
+                waitFor('#chat_field'),
+                waitFor('#unlock_premium')
+            ]);
+
+            if (readyElement.id === 'unlock_premium') {
+                readyElement.click();
+                await waitFor('#chat_field');
+            }
+        } catch (error) {
+            console.error("Failed to prepare chat page.", error);
+        }
+    }
+
+
     async function runAllTasksForCurrentModel() {
+        await prepareChatPage();
+
         const tasks = S.tasks();
         const textarea = await waitFor('#chat_field');
-        if (testCancelled) return;
+        if (testCancelled || !textarea) return;
 
         const totalModels = S.modelSelection().length;
         const completedModels = S.completed().length;
@@ -647,18 +665,17 @@
         renderList();
     }
 
-
-    // NEW LOGIC: This function controls the multi-model test flow.
     async function processMultiModelTest() {
         if (!S.isTesting() || testCancelled) return;
 
-        // Step 1: Execute all tasks for the current model.
         await runAllTasksForCurrentModel();
         if (testCancelled) return;
 
-        // Step 2: Update state after finishing with the current model.
-        const currentIdMatch = location.pathname.match(/\/chat\/(.+)$/);
-        if (!currentIdMatch) return;
+        const currentIdMatch = location.pathname.match(/\/chat\/(.+)$/) || location.pathname.match(/\/premium-models\/(.+)$/);
+        if (!currentIdMatch) {
+            console.error("Could not determine current model ID to proceed.");
+            return;
+        }
         const currentId = currentIdMatch[1];
 
         const completed = S.completed();
@@ -668,20 +685,18 @@
         }
 
         const queue = S.queue();
-        if (queue[0] === currentId) {
-            queue.shift();
+        const currentIndexInQueue = queue.indexOf(currentId);
+        if (currentIndexInQueue > -1) {
+            queue.splice(currentIndexInQueue, 1);
             S.saveQueue(queue);
         }
 
-        // Step 3: Decide what to do next.
         if (queue.length > 0) {
-            // If there are more models, navigate to the next one.
             setTimeout(() => {
                 if (testCancelled) return;
                 window.location.href = `${location.origin}/chat/${queue[0]}`;
             }, 500);
         } else {
-            // If no more models, the test is complete.
             sessionStorage.removeItem('honeyTestInProgress');
             setPanelState('completed');
             renderList();
@@ -724,6 +739,8 @@
     }
 
     function main() {
+        if (!location.hostname.includes("get-honey")) return;
+
         if (document.querySelector('.honey-panel') || panelClosedByUser) {
             return;
         }
@@ -737,7 +754,6 @@
         if (isTesting) {
             setPanelState('testing');
             initializeProgressBar();
-            // The new logic is simpler: if a test is running, it must be processing the current model.
             processMultiModelTest();
         } else if (isViewingCompleted) {
             setPanelState('completed');
@@ -751,7 +767,8 @@
 
         setInterval(() => {
             if (panelElements && panelElements.runHereBtn && !panelElements.runHereBtn.classList.contains('honey-hidden')) {
-                panelElements.runHereBtn.disabled = !location.pathname.includes('/chat/');
+                const isChatPage = location.pathname.includes('/chat/') || location.pathname.includes('/premium-models/');
+                panelElements.runHereBtn.disabled = !isChatPage;
             }
         }, 500);
 
