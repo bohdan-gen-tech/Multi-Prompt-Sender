@@ -10,8 +10,8 @@
 // @icon         https://cdn-icons-png.flaticon.com/512/5962/5962463.png
 // @require      https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js
 // @grant        none
-// @updateURL    https://raw.githubusercontent.com/bohdan-gen-tech/Media-Counter/main/media-counter.user.js
-// @downloadURL  https://raw.githubusercontent.com/bohdan-gen-tech/Media-Counter/main/media-counter.user.js
+// @updateURL    https://raw.githubusercontent.com/bohdan-gen-tech/MultiChat-Prompt-Sender/main/multichat-prompt-sender.user.js
+// @downloadURL  https://raw.githubusercontent.com/bohdan-gen-tech/MultiChat-Prompt-Sender/main/multichat-prompt-sender.user.js
 // ==/UserScript==
 // ==/UserScript==
 
