@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Multi Prompt Sender
 // @namespace    https://your-namespace.example.com
-// @version      2025.09.09.01
-// @description  Auto prompt sender in the chats after parsing models for current user, with custom character support.
+// @version      2025.09.09.09
+// @description  Auto prompt/gift sender in chats, with custom character support and generation tools.
 // @author       Bohdan S.
 // @match        *://*/*
 // @exclude      https://form-v2.charge-auth.com/*
@@ -50,6 +50,8 @@
             photoGenInProgress: 'honeyPhotoGenInProgress',
             videoGenQueue: 'honeyVideoGenQueue',
             videoGenInProgress: 'honeyVideoGenInProgress',
+            giftQueue: 'honeyGiftQueue',
+            giftInProgress: 'honeyGiftInProgress',
             preGenAction: 'honeyPreGenAction',
             testCompletedFlag: 'honeyTestCompletedFlag',
             persistAuth: 'persist:auth',
@@ -76,6 +78,11 @@
             videoGen: {
                 generateBtn: '#generate_video_btn',
                 countBtnPrefix: '#videos_number_',
+            },
+            gifts: {
+                openGiftListBtnXpath: "//button[@type='button']", // Note: This selector is generic and might need adjustment for the specific website.
+                giftItemXpath: (index) => `//div[@role='presentation']//li[${index}]`,
+                sendGiftBtn: "#send_gift_btn",
             }
         },
         modelGroups: [
@@ -90,7 +97,7 @@
             waitFor: 300,
             scroll: 500,
             general: 200,
-            short: 100,
+            short: 500,
             long: 3000,
             uiUpdate: 500,
             init: 1000
@@ -127,6 +134,7 @@
             parseModels: 'Parse Models',
             addPrompt: '+ Add Prompt',
             tabChats: 'Chats',
+            tabGifts: 'Gifts',
             tabPhoto: 'Standalone Photo',
             tabVideo: 'Standalone Video',
             pregenNone: 'None',
@@ -138,20 +146,23 @@
             updateListTitle: 'Update Model List',
             runSelected: 'Run in selected chat(s)',
             runHere: 'Run in opened chat',
+            runGifts: 'Send Gift(s) to selected',
+            runHereGifts: 'Send in opened chat',
             runPhotoGen: 'Run Photo Generation',
             runVideoGen: 'Run Video Generation',
             startNewTest: 'Start New Test',
             cancelTest: 'Cancel Test',
             loading: '<em>Loading...</em>',
             dragReorderTitle: 'Drag to reorder',
-            promptPlaceholder: 'Chat or Generation Prompt',
+            promptPlaceholder: 'Chat/Gift Prompt',
             countPlaceholder: '#',
-            countTitle: 'Number of messages / Generations',
+            countTitle: 'Number of messages / Gifts / Generations',
             delayPlaceholder: '⏱',
             delayTitle: 'Delay between tasks/models (in seconds)',
             removePromptTitle: 'Remove this prompt',
             gotoChatTitle: 'Go to chat',
             testCompleted: 'Test completed in chat(s)',
+            giftsCompleted: 'Gift sending complete!',
             photoGenCompleted: 'Photo Gen complete!',
             videoGenCompleted: 'Video Gen complete!',
         },
@@ -166,12 +177,15 @@
             btnRow: 'honey-btn-row',
             runChatsBtn: 'run-chats-btn',
             runHereBtn: 'run-here-btn',
+            runGiftsBtn: 'run-gifts-btn',
+            runHereGiftsBtn: 'run-here-gifts-btn',
             photoGenBtn: 'photo-gen-btn',
             videoGenBtn: 'video-gen-btn',
             cancelBtn: 'cancel-btn',
             addPromptBtn: 'add-prompt-btn',
             input: 'honey-input',
             listContainer: 'honey-list-container',
+            promptsContainer: 'honey-prompts-container',
             row: 'honey-row',
             listToolbar: 'honey-list-toolbar',
             modelTypeLabel: 'honey-model-type-label',
@@ -213,12 +227,15 @@
             .honey-btn-row { display: flex; gap: 8px; }
             .honey-btn.run-chats-btn { background-color: #9F48B1; }
             .honey-btn.run-here-btn { background-color: #f0ad4e; }
+            .honey-btn.run-gifts-btn { background-color: #2a75bb; }
+            .honey-btn.run-here-gifts-btn { background-color: #f0ad4e; }
             .honey-btn.photo-gen-btn { background-color: #9b59b6; }
             .honey-btn.video-gen-btn { background-color: #3498db; }
             .honey-btn.cancel-btn { background-color: #d9534f; }
             .honey-btn.add-prompt-btn { background-color: #5cb85c; margin-top: 2px; padding: 5px; }
             .honey-input { flex: 1; padding: 5px 5px; background: #2c2f33; color: #e0e0e0; border: 1px solid #444; border-radius: 4px; font-size: 11px;}
             .honey-input::placeholder { color: #888; }
+            .honey-prompts-container { max-height: 170px; overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
             .honey-list-container { max-height: 220px; overflow-y: auto; background: #25282c; padding: 8px; border-radius: 6px; border: 1px solid #333; }
             .honey-row { display: flex; align-items: center; padding: 3px; border-radius: 4px; transition: background-color 0.2s; }
             .honey-list-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; border-bottom: 1px solid #444; padding-bottom: 8px; }
@@ -298,7 +315,14 @@
         startVideoGening: () => sessionStorage.setItem(APP_CONFIG.storageKeys.videoGenInProgress, 'true'),
         clearVideoGenProgress: () => {
             [APP_CONFIG.storageKeys.videoGenQueue, APP_CONFIG.storageKeys.videoGenInProgress].forEach(k => sessionStorage.removeItem(k));
-        }
+        },
+        giftQueue: () => JSON.parse(sessionStorage.getItem(APP_CONFIG.storageKeys.giftQueue) || '[]'),
+        saveGiftQueue: (q) => sessionStorage.setItem(APP_CONFIG.storageKeys.giftQueue, JSON.stringify(q)),
+        isGifting: () => sessionStorage.getItem(APP_CONFIG.storageKeys.giftInProgress) === 'true',
+        startGifting: () => sessionStorage.setItem(APP_CONFIG.storageKeys.giftInProgress, 'true'),
+        clearGiftProgress: () => {
+            [APP_CONFIG.storageKeys.giftQueue, APP_CONFIG.storageKeys.giftInProgress].forEach(k => sessionStorage.removeItem(k));
+        },
     };
 
     // --- UTILITY FUNCTIONS ---
@@ -475,10 +499,12 @@
     function handleToggleCollapse(button, body) {
         const isCollapsed = body.style.display === 'none';
         body.style.display = isCollapsed ? 'flex' : 'none';
-        button.textContent = isCollapsed ? VISUAL_DATA.icons.expand : VISUAL_DATA.icons.collapse;
-        button.title = isCollapsed ? VISUAL_DATA.text.expandTitle : VISUAL_DATA.text.collapseTitle;
+        // FIX: Swapped icons to correctly reflect the next state.
+        button.innerHTML = isCollapsed ? VISUAL_DATA.icons.collapse : VISUAL_DATA.icons.expand;
+        button.title = isCollapsed ? VISUAL_DATA.text.collapseTitle : VISUAL_DATA.text.expandTitle;
         localStorage.setItem(APP_CONFIG.storageKeys.collapsed, JSON.stringify(!isCollapsed));
     }
+
 
     // --- UI & RENDERING ---
 
@@ -506,14 +532,18 @@
         `;
         p.body = document.createElement('div'); p.body.className = C.body; p.body.style.display = isCollapsed ? 'none' : 'flex';
         p.parseBtn = document.createElement('button'); p.parseBtn.textContent = T.parseModels; p.parseBtn.className = `${C.btn} ${C.runChatsBtn}`;
-        p.promptsContainer = document.createElement('div');
+        // NEW: Add class for scrolling behavior
+        p.promptsContainer = document.createElement('div'); p.promptsContainer.className = C.promptsContainer;
         p.addPromptBtn = document.createElement('button'); p.addPromptBtn.textContent = T.addPrompt; p.addPromptBtn.className = `${C.btn} ${C.addPromptBtn}`;
 
         p.tabContainer = document.createElement('div'); p.tabContainer.className = C.tabContainer;
         p.chatTabBtn = document.createElement('button'); p.chatTabBtn.className = C.tabBtn; p.chatTabBtn.textContent = T.tabChats;
         p.photoTabBtn = document.createElement('button'); p.photoTabBtn.className = C.tabBtn; p.photoTabBtn.textContent = T.tabPhoto;
         p.videoTabBtn = document.createElement('button'); p.videoTabBtn.className = C.tabBtn; p.videoTabBtn.textContent = T.tabVideo;
-        p.tabContainer.append(p.chatTabBtn, p.photoTabBtn, p.videoTabBtn);
+        // NEW: Gift tab button
+        p.giftTabBtn = document.createElement('button'); p.giftTabBtn.className = C.tabBtn; p.giftTabBtn.textContent = T.tabGifts;
+        p.tabContainer.append(p.chatTabBtn, p.photoTabBtn, p.videoTabBtn, p.giftTabBtn);
+
 
         p.radioContainer = document.createElement('div');
         p.radioContainer.className = C.radioContainer;
@@ -533,6 +563,8 @@
         p.chatTabContent = document.createElement('div'); p.chatTabContent.className = C.tabContent;
         p.photoTabContent = document.createElement('div'); p.photoTabContent.className = C.tabContent;
         p.videoTabContent = document.createElement('div'); p.videoTabContent.className = C.tabContent;
+        // NEW: Gift tab content
+        p.giftTabContent = document.createElement('div'); p.giftTabContent.className = C.tabContent;
 
         p.testBtn = document.createElement('button'); p.testBtn.textContent = T.runSelected; p.testBtn.className = `${C.btn} ${C.runChatsBtn}`;
         p.runHereBtn = document.createElement('button'); p.runHereBtn.textContent = T.runHere; p.runHereBtn.className = `${C.btn} ${C.runHereBtn}`;
@@ -540,13 +572,20 @@
         chatButtonRow.append(p.testBtn, p.runHereBtn);
         p.chatTabContent.append(p.radioContainer, chatButtonRow);
 
+        // NEW: Gift tab buttons
+        p.runGiftsBtn = document.createElement('button'); p.runGiftsBtn.textContent = T.runGifts; p.runGiftsBtn.className = `${C.btn} ${C.runGiftsBtn}`;
+        p.runHereGiftsBtn = document.createElement('button'); p.runHereGiftsBtn.textContent = T.runHereGifts; p.runHereGiftsBtn.className = `${C.btn} ${C.runHereGiftsBtn}`;
+        const giftButtonRow = document.createElement('div'); giftButtonRow.className = C.btnRow;
+        giftButtonRow.append(p.runGiftsBtn, p.runHereGiftsBtn);
+        p.giftTabContent.append(giftButtonRow);
+
         p.photoGenBtn = document.createElement('button'); p.photoGenBtn.textContent = T.runPhotoGen; p.photoGenBtn.className = `${C.btn} ${C.photoGenBtn}`;
         p.photoTabContent.append(p.photoGenBtn);
 
         p.videoGenBtn = document.createElement('button'); p.videoGenBtn.textContent = T.runVideoGen; p.videoGenBtn.className = `${C.btn} ${C.videoGenBtn}`;
         p.videoTabContent.append(p.videoGenBtn);
 
-        p.tabContentContainer.append(p.chatTabContent, p.photoTabContent, p.videoTabContent);
+        p.tabContentContainer.append(p.chatTabContent, p.photoTabContent, p.videoTabContent, p.giftTabContent);
 
         p.newTestBtn = document.createElement('button');
         p.newTestBtn.textContent = T.startNewTest;
@@ -579,12 +618,16 @@
         p.addPromptBtn.addEventListener('click', () => addPromptField());
         p.testBtn.addEventListener('click', () => startTests(false));
         p.runHereBtn.addEventListener('click', () => startTests(true));
+        // NEW: Gift button listeners
+        p.runGiftsBtn.addEventListener('click', () => startGiftSending(false));
+        p.runHereGiftsBtn.addEventListener('click', () => startGiftSending(true));
         p.photoGenBtn.addEventListener('click', startPhotoGeneration);
         p.videoGenBtn.addEventListener('click', startVideoGeneration);
         p.newTestBtn.addEventListener('click', async () => {
             S.clearTestProgress();
             S.clearPhotoGenProgress();
             S.clearVideoGenProgress();
+            S.clearGiftProgress();
             adminTokenCache = null;
             await fetchAndRender();
         });
@@ -593,6 +636,7 @@
             S.clearTestProgress();
             S.clearPhotoGenProgress();
             S.clearVideoGenProgress();
+            S.clearGiftProgress();
             S.saveModelSelection([]);
             adminTokenCache = null;
             setPanelState('configured');
@@ -604,12 +648,13 @@
         const tabs = {
             chat: { btn: p.chatTabBtn, content: p.chatTabContent },
             photo: { btn: p.photoTabBtn, content: p.photoTabContent },
-            video: { btn: p.videoTabBtn, content: p.videoTabContent }
+            video: { btn: p.videoTabBtn, content: p.videoTabContent },
+            gift: { btn: p.giftTabBtn, content: p.giftTabContent } // NEW: Gift tab object
         };
 
         /**
          * @description Switches the visible tab in the UI.
-         * @param {string} tabName The name of the tab to switch to ('chat', 'photo', 'video').
+         * @param {string} tabName The name of the tab to switch to ('chat', 'photo', 'video', 'gift').
          */
         function switchTab(tabName) {
             if (!tabs[tabName]) tabName = 'chat'; // Fallback to default
@@ -621,17 +666,32 @@
             });
             tabs[tabName].btn.classList.add(VISUAL_DATA.classes.active);
             tabs[tabName].content.classList.add(VISUAL_DATA.classes.active);
+            updatePromptsPlaceholder();
             renderList();
         }
 
         p.chatTabBtn.addEventListener('click', () => switchTab('chat'));
         p.photoTabBtn.addEventListener('click', () => switchTab('photo'));
         p.videoTabBtn.addEventListener('click', () => switchTab('video'));
+        p.giftTabBtn.addEventListener('click', () => switchTab('gift')); // NEW: Gift tab listener
 
         const lastTab = localStorage.getItem(APP_CONFIG.storageKeys.activeTab) || 'chat';
         switchTab(lastTab);
 
         attachDragAndDropListeners(p.promptsContainer);
+    }
+
+    /**
+     * @description Updates the placeholder text for prompt inputs based on the active tab.
+     */
+    function updatePromptsPlaceholder() {
+        const placeholderText = activeTab === 'gift'
+            ? 'Gift Index (1-9)'
+            : VISUAL_DATA.text.promptPlaceholder;
+
+        panelElements.promptsContainer.querySelectorAll(`.${VISUAL_DATA.classes.promptInput}`).forEach(input => {
+            input.placeholder = placeholderText;
+        });
     }
 
     /**
@@ -747,7 +807,8 @@
 
         const promptInput = document.createElement('input');
         promptInput.className = `${C.input} ${C.promptInput}`;
-        promptInput.placeholder = T.promptPlaceholder;
+        // Placeholder is now set dynamically
+        promptInput.placeholder = activeTab === 'gift' ? 'Gift Index (1-9)' : T.promptPlaceholder;
         promptInput.value = prompt;
         const countInput = createValidatedInput(T.countPlaceholder, count, false, false, 2);
         countInput.classList.add(C.countInput);
@@ -764,13 +825,20 @@
         removeBtn.textContent = I.remove;
         removeBtn.title = T.removePromptTitle;
         removeBtn.onclick = () => {
+            // This logic allows removing the last prompt field if it's not the only one.
             if (panelElements.promptsContainer.querySelectorAll(`.${C.promptEntry}`).length > 1) {
                 entry.remove();
+            } else {
+                // If it is the last one, just clear its fields.
+                entry.querySelector(`.${C.promptInput}`).value = '';
+                entry.querySelector(`.${C.countInput}`).value = '';
+                entry.querySelector(`.${C.delayInput}`).value = '';
             }
         };
         entry.append(dragHandle, promptInput, countInput, delayInput, removeBtn);
         panelElements.promptsContainer.append(entry);
     }
+
 
     /**
      * @description Renders the list of prompt fields based on data from sessionStorage.
@@ -781,6 +849,7 @@
         const tasks = S.tasks();
         if (tasks.length > 0) { tasks.forEach(task => addPromptField(task.prompt, task.count, task.delay)); }
         else { addPromptField(); }
+        updatePromptsPlaceholder();
     }
 
     /**
@@ -809,6 +878,7 @@
             [p.promptsContainer, p.addPromptBtn, p.tabContainer, p.searchInput, p.listContainer, p.tabContentContainer].forEach(el => el.classList.remove(C.hidden));
             const isChatPage = location.pathname.includes('/chat/') || location.pathname.includes('/premium-models/');
             p.runHereBtn.disabled = !isChatPage;
+            p.runHereGiftsBtn.disabled = !isChatPage;
         }
         else if (state === 'testing') { [p.taskProgress, p.listContainer, p.cancelBtn].forEach(el => el.classList.remove(C.hidden)); }
         else if (state === 'completed') { [p.listContainer, p.newTestBtn, p.taskProgress].forEach(el => el.classList.remove(C.hidden)); }
@@ -823,7 +893,7 @@
         listContainer.innerHTML = '';
         let allModels = S.models() || [];
 
-        const isCurrentlyTesting = S.isTesting();
+        const isCurrentlyTesting = S.isTesting() || S.isGifting(); // Gifts are a type of test
         const isCurrentlyPhotoGening = S.isPhotoGening();
         const isCurrentlyVideoGening = S.isVideoGening();
         const isProcessing = isCurrentlyTesting || isCurrentlyPhotoGening || isCurrentlyVideoGening;
@@ -846,10 +916,14 @@
             'Custom Characters': customCharacters
         };
 
+        // Filter models based on active tab compatibility
         if (activeTab === 'photo') {
             delete modelsToRender['Inclusive Models'];
         } else if (activeTab === 'video') {
             delete modelsToRender['Inclusive Models'];
+            delete modelsToRender['Custom Characters'];
+        }
+        else if (activeTab === 'gift') {
             delete modelsToRender['Custom Characters'];
         }
 
@@ -862,7 +936,7 @@
 
         const completedIds = new Set(S.completed());
         let currentId = null;
-        if (isCurrentlyTesting) {
+        if (isCurrentlyTesting) { // Includes gifts
             const match = location.pathname.match(/\/chat\/(.+)$/) || location.pathname.match(/\/premium-models\/(.+)$/);
             if (match) currentId = match[1];
         } else if (isCurrentlyPhotoGening || isCurrentlyVideoGening) {
@@ -1020,10 +1094,10 @@
             checkbox.style.display = 'none';
             const icon = document.createElement('span'); icon.className = C.progressIcon; row.prepend(icon);
             if (completedIds && completedIds.has(model.id)) { row.classList.add(C.completed); }
-            if ((S.isTesting() || S.isPhotoGening() || S.isVideoGening()) && model.id === currentId) { row.classList.add(C.current); }
+            if ((S.isTesting() || S.isGifting() || S.isPhotoGening() || S.isVideoGening()) && model.id === currentId) { row.classList.add(C.current); }
         }
 
-        const isViewingCompleted = !(S.isTesting() || S.isPhotoGening() || S.isVideoGening()) && S.completed().length > 0;
+        const isViewingCompleted = !(S.isTesting() || S.isGifting() || S.isPhotoGening() || S.isVideoGening()) && S.completed().length > 0;
         if (!isFlatView || isViewingCompleted) {
             const linkBtn = document.createElement('a');
             linkBtn.href = `${APP_CONFIG.api.baseUrl()}/chat/${model.id}`;
@@ -1094,9 +1168,12 @@
                 }
             }
 
-            panelElements.testBtn.disabled = selectedCount === 0;
-            panelElements.photoGenBtn.disabled = selectedCount === 0;
-            panelElements.videoGenBtn.disabled = selectedCount === 0;
+            const noModelsSelected = selectedCount === 0;
+            panelElements.testBtn.disabled = noModelsSelected;
+            panelElements.runGiftsBtn.disabled = noModelsSelected;
+            panelElements.photoGenBtn.disabled = noModelsSelected;
+            panelElements.videoGenBtn.disabled = noModelsSelected;
+
 
             groupCheckboxes.forEach(groupCb => {
                 if (groupCb === masterCheckbox) return;
@@ -1305,8 +1382,8 @@
             panelElements.listContainer.innerHTML = `<span style="color:#ff4d4d">API Error: ${e.message}</span>`;
             await delay(APP_CONFIG.delays.long);
             if(S.models() === null) {
-                 setPanelState('initial');
-                 panelElements.parseBtn.disabled = false;
+                   setPanelState('initial');
+                   panelElements.parseBtn.disabled = false;
             }
         }
     }
@@ -1573,6 +1650,177 @@
     }
 
     /**
+     * @description Starts the gift sending process.
+     * @param {boolean} [runHere=false] If true, runs only in the currently open chat.
+     */
+    async function startGiftSending(runHere = false) {
+        testCancelled = false;
+        let modelIds;
+
+        if (runHere) {
+            const match = location.pathname.match(/\/chat\/(.+)$/) || location.pathname.match(/\/premium-models\/(.+)$/);
+            if (!match) {
+                alert("This feature only works on a chat page.");
+                return;
+            }
+            modelIds = [match[1]];
+        } else {
+            modelIds = Array.from(panelElements.listContainer.querySelectorAll(`.${VISUAL_DATA.classes.modelCheckbox}:checked`)).map(cb => cb.value);
+            if (!modelIds.length) {
+                alert('Please select models to send gifts to!');
+                return;
+            }
+        }
+
+        const tasks = [];
+        let validationFailed = false;
+        panelElements.promptsContainer.querySelectorAll(`.${VISUAL_DATA.classes.promptEntry}`).forEach(entry => {
+            if (validationFailed) return;
+            const promptValue = entry.querySelector(`.${VISUAL_DATA.classes.promptInput}`).value.trim();
+            if (!promptValue) return; // Skip empty prompts
+
+            const giftIndex = parseInt(promptValue, 10);
+            if (isNaN(giftIndex) || giftIndex < 1 || giftIndex > 9) {
+                alert(`Invalid gift index: "${promptValue}". Please enter a number between 1 and 9.`);
+                validationFailed = true;
+                return;
+            }
+
+            const count = parseInt(entry.querySelector(`.${VISUAL_DATA.classes.countInput}`).value, 10) || 1;
+            const delayInSeconds = parseFloat(entry.querySelector(`.${VISUAL_DATA.classes.delayInput}`).value) || 0;
+            tasks.push({ prompt: giftIndex.toString(), count, delay: delayInSeconds });
+        });
+
+        if (validationFailed) return;
+        if (!tasks.length) {
+            alert('Please enter at least one valid gift index (1-9)!');
+            return;
+        }
+
+        S.saveTasks(tasks);
+        S.saveModelSelection(modelIds);
+        S.saveGiftQueue(modelIds);
+        S.saveCompleted([]);
+        S.startGifting();
+
+        if (runHere) {
+            setPanelState('testing');
+            initializeProgressBar();
+            renderList();
+            await processMultiModelGifts(); // Await this to finish for the single model
+        } else {
+            window.location.href = `${APP_CONFIG.api.baseUrl()}/chat/${modelIds[0]}`;
+        }
+    }
+
+    /**
+     * @description Executes all defined gift tasks for the currently open chat model.
+     */
+    async function runAllGiftsForCurrentModel() {
+        if (!S.isGifting()) return;
+        await handlePageUnlock();
+
+        const tasks = S.tasks();
+        if (testCancelled) return;
+
+        const totalModels = S.modelSelection().length;
+        const completedModels = S.completed().length;
+        const queue = S.giftQueue();
+
+        for (let i = 0; i < tasks.length; i++) {
+            if (testCancelled) return;
+            const task = tasks[i];
+            const giftIndex = parseInt(task.prompt, 10);
+            panelElements.taskProgress.textContent = `Model ${completedModels + 1}/${totalModels} | Gift #${giftIndex}`;
+
+            for (let j = 0; j < task.count; j++) {
+                if (testCancelled) return;
+                try {
+                    // 1. Open gift list
+                    const giftListBtn = await waitFor(APP_CONFIG.selectors.gifts.openGiftListBtnXpath, true);
+                    giftListBtn.click();
+                    await delay(APP_CONFIG.delays.short);
+
+                    // 2. Select gift
+                    const giftItem = await waitFor(APP_CONFIG.selectors.gifts.giftItemXpath(giftIndex), true);
+                    giftItem.click();
+                    await delay(APP_CONFIG.delays.short);
+
+                    // 3. Send gift
+                    const sendBtn = await waitFor(APP_CONFIG.selectors.gifts.sendGiftBtn);
+                    sendBtn.click();
+
+                    // Wait a bit for the action to complete
+                    await delay(APP_CONFIG.delays.long);
+
+                } catch (e) {
+                    console.error(`Failed to send gift ${giftIndex} on repetition ${j+1}:`, e);
+                    // Decide whether to stop or continue. For now, we log and continue.
+                }
+
+                const isLastRepetition = j === task.count - 1;
+                const isLastTask = i === tasks.length - 1;
+                const isLastModel = queue.length <= 1;
+
+                // Apply delay if specified, except for the very last action of all
+                if (task.delay > 0 && !(isLastTask && isLastModel && isLastRepetition)) {
+                    await delay(task.delay * 1000);
+                } else {
+                    await delay(APP_CONFIG.delays.general);
+                }
+            }
+        }
+    }
+
+    /**
+     * @description Main process loop for multi-model gift sending. Runs tasks and navigates.
+     */
+    async function processMultiModelGifts() {
+        if (!S.isGifting() || testCancelled) return;
+        await runAllGiftsForCurrentModel();
+        if (testCancelled) return;
+
+        const currentIdMatch = location.pathname.match(/\/chat\/(.+)$/) || location.pathname.match(/\/premium-models\/(.+)$/);
+        if (!currentIdMatch) {
+            console.error("Could not determine current model ID to proceed with gifts.");
+            testCancelled = true;
+            return;
+        }
+        const currentId = currentIdMatch[1];
+        const completed = S.completed();
+        if (!completed.includes(currentId)) {
+            completed.push(currentId);
+            S.saveCompleted(completed);
+        }
+
+        let queue = S.giftQueue();
+        const currentIndexInQueue = queue.indexOf(currentId);
+        if (currentIndexInQueue > -1) {
+            queue.splice(currentIndexInQueue, 1);
+        } else {
+            queue = S.modelSelection().filter(id => !S.completed().includes(id));
+        }
+        S.saveGiftQueue(queue);
+
+        if (queue.length > 0) {
+            const tasks = S.tasks();
+            const lastTask = tasks[tasks.length - 1];
+            const delayInSeconds = lastTask ? (lastTask.delay || 0) : 0;
+            setTimeout(() => {
+                if (testCancelled) return;
+                window.location.href = `${APP_CONFIG.api.baseUrl()}/chat/${queue[0]}`;
+            }, delayInSeconds * 1000);
+        } else {
+            S.clearGiftProgress();
+            setPanelState('completed');
+            renderList();
+            panelElements.taskProgress.classList.remove(VISUAL_DATA.classes.hidden);
+            panelElements.taskProgress.textContent = VISUAL_DATA.text.giftsCompleted;
+        }
+    }
+
+
+    /**
      * @description Gets the appropriate button ID for image generation based on the desired count.
      * @param {string} prefix The common prefix for the button IDs.
      * @param {number} count The desired number of images.
@@ -1827,13 +2075,14 @@
      * @description Initializes and updates the progress bar text during a test.
      */
     function initializeProgressBar() {
-        if (!S.isTesting() && !S.isPhotoGening() && !S.isVideoGening()) return;
+        if (!S.isTesting() && !S.isGifting() && !S.isPhotoGening() && !S.isVideoGening()) return;
         const modelSelection = S.modelSelection();
         const totalModels = modelSelection.length;
         const completedCount = S.completed().length;
         let mode = 'Test';
         if (S.isPhotoGening()) mode = 'Photo Gen';
         if (S.isVideoGening()) mode = 'Video Gen';
+        if (S.isGifting()) mode = 'Gift';
         panelElements.taskProgress.textContent = `${mode} ${completedCount + 1}/${totalModels}`;
     }
 
@@ -1870,14 +2119,19 @@
         createPanel();
 
         const isTesting = S.isTesting();
+        const isGifting = S.isGifting();
         const isPhotoGening = S.isPhotoGening();
         const isVideoGening = S.isVideoGening();
-        const isViewingCompleted = !isTesting && !isPhotoGening && !isVideoGening && S.completed().length > 0;
+        const isViewingCompleted = !isTesting && !isGifting && !isPhotoGening && !isVideoGening && S.completed().length > 0;
 
         if (isTesting) {
             setPanelState('testing');
             initializeProgressBar();
             processMultiModelTest();
+        } else if (isGifting) {
+            setPanelState('testing');
+            initializeProgressBar();
+            processMultiModelGifts();
         } else if (isPhotoGening) {
             renderPrompts();
             if (location.pathname.includes('/ai-girlfriend-generator')) {
@@ -1925,6 +2179,7 @@
             if (panelElements && panelElements.runHereBtn && !panelElements.runHereBtn.classList.contains(VISUAL_DATA.classes.hidden)) {
                 const isChatPage = location.pathname.includes('/chat/') || location.pathname.includes('/premium-models/');
                 panelElements.runHereBtn.disabled = !isChatPage;
+                panelElements.runHereGiftsBtn.disabled = !isChatPage;
             }
         }, APP_CONFIG.delays.uiUpdate);
 
