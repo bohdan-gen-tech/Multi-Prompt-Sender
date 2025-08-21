@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Multi Prompt Sender
 // @namespace    https://your-namespace.example.com
-// @version      2025.09.09.09
-// @description  Auto prompt/gift sender in chats, with custom character support and generation tools.
+// @version      2025.08.22.1
+// @description  Auto prompt/gift sender in chats, with custom character support and generation tools. Won't run in iframe.
 // @author       Bohdan S.
 // @match        *://*/*
 // @exclude      https://form-v2.charge-auth.com/*
@@ -16,6 +16,10 @@
 
 (function() {
     'use strict';
+
+    if (window.self !== window.top) {
+        return;
+    }
 
     // ===================================================================================
     // --- APPLICATION CONFIGURATION ---
