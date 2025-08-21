@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Multi Prompt Sender
-// @namespace    https://your-namespace.example.com
+// @namespace    https://github.com/bohdan-gen-tech
 // @version      2025.08.22.1
 // @description  Auto prompt/gift sender in chats, with custom character support and generation tools. Won't run in iframe.
 // @author       Bohdan S.
