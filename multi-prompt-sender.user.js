@@ -5,8 +5,6 @@
 // @description  Auto prompt/gift sender in chats, with custom character support and generation tools. Won't run in iframe.
 // @author       Bohdan S.
 // @match        *://*/*
-// @exclude      https://form-v2.charge-auth.com/*
-// @exclude      https://pay.google.com/*
 // @icon         https://cdn-icons-png.flaticon.com/512/5962/5962463.png
 // @require      https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js
 // @grant        none
